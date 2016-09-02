@@ -1,6 +1,9 @@
 import fs from 'fs';
-import { defaults } from 'lodash';
+import { merge } from 'lodash';
 import { EventEmitter } from 'events';
+import parse from 'csv-parse';
+import iconv from 'iconv-lite';
+import { Promise } from 'bluebird';
 
 export const transformer = {
   seed(options) {
@@ -71,7 +74,7 @@ export class KnexCsvTransformer extends EventEmitter {
       }
     };
 
-    return _.merge({}, defaults, opts);
+    return merge({}, defaults, opts);
   }
   generate(options) {
     this.opts = this.mergeOptions(options);

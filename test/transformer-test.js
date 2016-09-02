@@ -1,4 +1,5 @@
 require('chai');
+import 'babel-polyfill';
 
 import { KnexCsvTransformer, transfomerHeader } from '../src/knex-csv-transformer';
 
@@ -27,7 +28,12 @@ context('when importing with headers', () => {
     it('merge the headers', () => {
       const seeder = transformer({table: 'results', file: __dirname + '/fixtures/test.csv', encoding: 'utf8'});
 
-      expect(seeder).not.to.be.undefined;
+      seeder(knex, Promise).then((res) => {
+        console.log(res);
+      }).catch((err) => {
+        console.log(err);
+        throw err;
+      });
     });
   });
 });
