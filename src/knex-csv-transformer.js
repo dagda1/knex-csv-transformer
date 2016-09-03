@@ -149,7 +149,7 @@ export class KnexCsvTransformer extends EventEmitter {
   createObjectFrom(record) {
     let obj = {};
 
-    const fields = this.opts.transformers.forEach((transformer, index) => {
+    this.opts.transformers.forEach((transformer, index) => {
       const headerIndex = findIndex(this.headers, (header) => {
         return header === transformer.column;
       });
