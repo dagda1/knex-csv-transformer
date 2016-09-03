@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { merge } from 'lodash';
+import { merge, findIndex, isObject, isFunction } from 'lodash';
 import { EventEmitter } from 'events';
 import parse from 'csv-parse';
 import iconv from 'iconv-lite';
@@ -21,8 +21,12 @@ export const transformer = {
 const identity = (x) => x;
 
 export function transfomerHeader(column, field, formatter, options) {
-  if(!options) {
+  if(!isFunction(formatter)) {
     options = formatter;
+    formatter = undefined;
+  }
+
+  if(!formatter) {
     formatter = identity;
   }
 
@@ -44,10 +48,12 @@ export class KnexCsvTransformer extends EventEmitter {
     this.opts = {};
     this.knex = knex;
     this.headers = [];
+    this.transformers = [];
     this.records = [];
     this.parser = null;
     this.queue = null;
     this.results = [];
+    this.transformers = [];
     this.onReadable = this.onReadable.bind(this);
     this.onEnd = this.onEnd.bind(this);
     this.onSucceeded = this.onSucceeded.bind(this);
@@ -76,6 +82,7 @@ export class KnexCsvTransformer extends EventEmitter {
 
     return merge({}, defaults, opts);
   }
+
   generate(options) {
     this.opts = this.mergeOptions(options);
 
@@ -142,14 +149,26 @@ export class KnexCsvTransformer extends EventEmitter {
   createObjectFrom(record) {
     let obj = {};
 
-    this.headers.forEach((column, i) => {
-      let val = record[i];
+    const fields = this.opts.transformers.forEach((transformer, index) => {
+      const headerIndex = findIndex(this.headers, (header) => {
+        return header === transformer.column;
+      });
 
-      if (typeof val === 'string' && val.toLowerCase() === 'null') {
-        val = null;
-      }
-      obj[column] = val;
+      const value = transformer.formatter(record[headerIndex]);
+
+      console.log(value);
+
+      obj[transformer.field] = value;
     });
+    // this.headers.forEach((column, i) => {
+    //   let val = record[i];
+
+    //   if (typeof val === 'string' && val.toLowerCase() === 'null') {
+    //     val = null;
+    //   }
+    //   obj[column] = val;
+    // });
+
     return obj;
   }
 

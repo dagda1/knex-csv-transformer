@@ -23,10 +23,12 @@
   },
   "homepage": "https://github.com/dagda1/knex-csv-reader#readme",
   "dependencies": {
+    "babel-plugin-transform-object-rest-spread": "^6.8.0",
     "babel-polyfill": "^6.13.0",
     "csv-parse": "^1.1.7",
     "knex": "^0.11.10",
     "lodash": "^4.15.0",
+    "moment": "^2.14.1",
     "pg": "^6.1.0"
   },
   "devDependencies": {
