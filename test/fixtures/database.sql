@@ -64,3 +64,6 @@ CREATE TABLE results
 WITH (
   OIDS=FALSE
 );
+
+INSERT INTO Managers(name, start_date, end_date)
+VALUES('Gerard Houllier', now(), now())

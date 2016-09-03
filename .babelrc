@@ -1,7 +1,8 @@
 {
-  "presets": ["es2015"],
+  "presets": ["stage-3"],
   "plugins": [
     "transform-es2015-modules-commonjs",
-    "transform-object-rest-spread"
+    "transform-object-rest-spread",
+    "transform-async-to-generator"
   ]
 }

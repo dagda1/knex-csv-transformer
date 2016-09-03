@@ -156,20 +156,14 @@ export class KnexCsvTransformer extends EventEmitter {
 
       const value = transformer.formatter(record[headerIndex]);
 
-      console.log(value);
-
       obj[transformer.field] = value;
     });
-    // this.headers.forEach((column, i) => {
-    //   let val = record[i];
-
-    //   if (typeof val === 'string' && val.toLowerCase() === 'null') {
-    //     val = null;
-    //   }
-    //   obj[column] = val;
-    // });
 
     return obj;
+  }
+
+  async executeQuery() {
+    return await this.knex('managers').select('name');
   }
 
   onSucceeded(res) {
