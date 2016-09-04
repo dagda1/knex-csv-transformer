@@ -97,7 +97,7 @@ export class KnexCsvTransformer extends EventEmitter {
     this.csv.pipe( iconv.decodeStream(this.opts.encoding) ).pipe(this.parser);
   }
 
-  onReadable() {
+  async onReadable() {
     let obj = {};
     let record = this.parser.read();
 
@@ -108,7 +108,7 @@ export class KnexCsvTransformer extends EventEmitter {
     if (this.parser.count <= 1) {
       this.headers = record;
     } else {
-      this.records.push( this.createObjectFrom(record) );
+      this.records.push( await this.createObjectFrom(record) );
     }
 
     if (this.records.length < this.opts.recordsPerQuery) {
@@ -146,20 +146,37 @@ export class KnexCsvTransformer extends EventEmitter {
     };
   }
 
-  createObjectFrom(record) {
+  async createObjectFrom(record) {
     let obj = {};
 
-    this.opts.transformers.forEach((transformer, index) => {
+    for(let i = 0, l = this.opts.transformers.length; i < l; i++) {
+      let transformer = this.opts.transformers[i];
+
       const headerIndex = findIndex(this.headers, (header) => {
         return header === transformer.column;
       });
 
-      const value = transformer.formatter(record[headerIndex]);
+      let value;
+      const csvValue = record[headerIndex];
+
+      if(transformer.options.lookUp) {
+        const lookUp = transformer.options.lookUp;
+
+        const whereClause = {};
+
+        whereClause[lookUp.column] = csvValue;
+
+        const result = await this.knex(lookUp.table).where(whereClause).select(lookUp.scalar);
+
+        value = result[0][lookUp.scalar];
+      } else {
+        value = transformer.formatter(csvValue);
+      }
 
       obj[transformer.field] = value;
-    });
+    }
 
-    return obj;
+    return Promise.resolve(obj);
   }
 
   async executeQuery() {
@@ -171,6 +188,7 @@ export class KnexCsvTransformer extends EventEmitter {
   }
 
   onFailed(err) {
+    console.dir(err);
     this.csv.unpipe();
     this.emit('error', err);
   }
