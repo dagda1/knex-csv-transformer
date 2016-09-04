@@ -66,4 +66,10 @@ WITH (
 );
 
 INSERT INTO Managers(name, start_date, end_date)
-VALUES('Gerard Houllier', now(), now())
+VALUES('Gerard Houllier', now(), now());
+
+INSERT INTO teams(name)
+VALUES('Wimbledon');
+
+INSERT INTO teams(name)
+VALUES('Southampton');
