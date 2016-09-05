@@ -186,7 +186,7 @@ export class KnexCsvTransformer extends EventEmitter {
           }
         }
       } else {
-        value = transformer.formatter(csvValue);
+        value = transformer.formatter(csvValue, record);
       }
 
       if(value && transformer.options.addIf(value)) {

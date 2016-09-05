@@ -37,6 +37,9 @@ const transformers = [
       createIfNotEqual: (value) => value !== "Liverpool"
     },
     addIf: (value) => value !== "Liverpool"
+  }),
+  transfomerHeader('Div', "location", function(value, data) {
+    return data[3] === "Liverpool" ? "h" : "a";
   })
 ];
 
@@ -69,7 +72,7 @@ context('knex-csv-transformer', () => {
       it('creates the transformers', () => {
         const transformed = transformer.opts.transformers;
 
-        expect(transformed.length).to.equal(4);
+        expect(transformed.length).to.equal(5);
       });
 
       it('creates the transformed object', async () => {
@@ -86,6 +89,8 @@ context('knex-csv-transformer', () => {
         const team = await knex("teams").where({id: record.team_id}).return('name');
 
         expect(team).to.equal(team);
+
+        expect(record.location).to.equal('h');
       });
     });
   });
