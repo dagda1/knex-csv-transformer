@@ -18,8 +18,25 @@ const transformers = [
       scalar: 'id'
     }
   }),
-  transfomerHeader('HomeTeam', 'location', function(row) {
-    console.log('in home team with row', row);
+  transfomerHeader('HomeTeam', 'team_id', {
+    lookUp: {
+      table: 'teams',
+      column: 'name',
+      scalar: 'id',
+      createIfNotExists: true,
+      createIfNotEqual: (value) => value !== "Liverpool"
+    },
+    addIf: (value) => value !== "Liverpool"
+  }),
+  transfomerHeader('AwayTeam', 'team_id', {
+    lookUp: {
+      table: 'teams',
+      column: 'name',
+      scalar: 'id',
+      createIfNotExists: true,
+      createIfNotEqual: (value) => value !== "Liverpool"
+    },
+    addIf: (value) => value !== "Liverpool"
   })
 ];
 
@@ -31,6 +48,7 @@ context('knex-csv-transformer', () => {
   beforeEach(() => {
     Promise.all([
       knex('results').del(),
+      knex('teams').del()
     ]);
   });
 
@@ -51,7 +69,7 @@ context('knex-csv-transformer', () => {
       it('creates the transformers', () => {
         const transformed = transformer.opts.transformers;
 
-        expect(transformed.length).to.equal(3);
+        expect(transformed.length).to.equal(4);
       });
 
       it('creates the transformed object', async () => {
@@ -61,9 +79,13 @@ context('knex-csv-transformer', () => {
 
         expect(record.time).to.equal('1998-11-07T00:00:00');
 
-        console.dir(record);
-
         expect(record.manager_id).to.equal(manager_id);
+
+        expect(record.team_id).not.to.be.undefined;
+
+        const team = await knex("teams").where({id: record.team_id}).return('name');
+
+        expect(team).to.equal(team);
       });
     });
   });

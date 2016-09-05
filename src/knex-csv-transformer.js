@@ -1,5 +1,5 @@
 import fs from 'fs';
-import { merge, findIndex, isObject, isFunction } from 'lodash';
+import { merge, findIndex, isObject, isFunction, isArray } from 'lodash';
 import { EventEmitter } from 'events';
 import parse from 'csv-parse';
 import iconv from 'iconv-lite';
@@ -31,6 +31,10 @@ export function transfomerHeader(column, field, formatter, options) {
   }
 
   options = options || {};
+
+  if(!options.hasOwnProperty('addIf')) {
+    options.addIf = () => true;
+  }
 
   return {
     column,
@@ -168,12 +172,26 @@ export class KnexCsvTransformer extends EventEmitter {
 
         const result = await this.knex(lookUp.table).where(whereClause).select(lookUp.scalar);
 
-        value = result[0][lookUp.scalar];
+        if(result.length) {
+          value = result[0][lookUp.scalar];
+        } else {
+          if(lookUp.createIfNotExists && lookUp.createIfNotEqual(csvValue)) {
+            const insert = {[lookUp.column]: csvValue};
+
+            const inserted = await this.knex(lookUp.table)
+              .insert(insert)
+              .returning('id');
+
+            value = inserted[0];
+          }
+        }
       } else {
         value = transformer.formatter(csvValue);
       }
 
-      obj[transformer.field] = value;
+      if(value && transformer.options.addIf(value)) {
+        obj[transformer.field] = value;
+      }
     }
 
     return Promise.resolve(obj);

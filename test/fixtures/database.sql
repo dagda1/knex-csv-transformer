@@ -49,7 +49,6 @@ CREATE TABLE results
   scored integer NOT NULL,
   conceded integer NOT NULL,
   result character varying(1) NOT NULL,
-  "position" integer NOT NULL,
   team_id integer,
   location character varying(1) NOT NULL,
   manager_id integer,
