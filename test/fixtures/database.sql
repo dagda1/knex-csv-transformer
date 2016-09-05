@@ -52,6 +52,7 @@ CREATE TABLE results
   team_id integer,
   location character varying(1) NOT NULL,
   manager_id integer,
+  division character varying(255),
   CONSTRAINT results_pkey PRIMARY KEY (id),
   CONSTRAINT results_manager_id_foreign FOREIGN KEY (manager_id)
       REFERENCES managers (id) MATCH SIMPLE

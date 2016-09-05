@@ -8,6 +8,7 @@ const moment = require('moment');
 const expect = chai.expect;
 
 const transformers = [
+  transfomerHeader('Div', 'division'),
   transfomerHeader('Date', 'time', function(value) {
     return new moment(value, "DD/MM/YYYY").format('YYYY-MM-DDT00:00:00');
   }),
@@ -89,13 +90,15 @@ context('knex-csv-transformer', () => {
       it('creates the transformers', () => {
         const transformed = transformer.opts.transformers;
 
-        expect(transformed.length).to.equal(8);
+        expect(transformed.length).to.equal(9);
       });
 
       it('creates the transformed object', async () => {
-        const csvRecord = ['E0', '07/11/1998', manager, 'Liverpool', 'Wimbledon', 0, 1, 'A', 0, 1, 'A'];
+        const csvRecord = ['PREMIER', '07/11/1998', manager, 'Liverpool', 'Wimbledon', 0, 1, 'A', 0, 1, 'A'];
 
         const record = await transformer.createObjectFrom(csvRecord);
+
+        expect(record.division).to.equal('PREMIER');
 
         expect(record.time).to.equal('1998-11-07T00:00:00');
 
@@ -114,6 +117,10 @@ context('knex-csv-transformer', () => {
         expect(record.conceded).to.equal(1);
 
         expect(record.result).to.equal('l');
+      });
+
+      it('excludes non applicable row', async() => {
+
       });
     });
   });

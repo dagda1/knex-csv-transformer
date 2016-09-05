@@ -21,12 +21,12 @@ export const transformer = {
 const identity = (x) => x;
 
 export function transfomerHeader(column, field, formatter, options) {
-  if(!isFunction(formatter)) {
-    options = formatter;
-    formatter = undefined;
+  if(!formatter && !options) {
+    formatter = identity;
   }
 
-  if(!formatter) {
+  if(!isFunction(formatter)) {
+    options = formatter;
     formatter = identity;
   }
 
