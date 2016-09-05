@@ -38,8 +38,25 @@ const transformers = [
     },
     addIf: (value) => value !== "Liverpool"
   }),
-  transfomerHeader('Div', "location", function(value, data) {
+  transfomerHeader('null', "location", function(value, data) {
     return data[3] === "Liverpool" ? "h" : "a";
+  }),
+  transfomerHeader('null', "scored", function(value, data) {
+    return data[3] === "Liverpool" ? data[5] : data[6];
+  }),
+  transfomerHeader('null', "conceded", function(value, data) {
+    return data[3] === "Liverpool" ? data[6] : data[5];
+  }),
+  transfomerHeader('null', "result", function(value, data, record) {
+    if(record.scored > record.conceded) {
+      return 'w';
+    } else if(record.scored < record.conceded) {
+      return 'l';
+    } else if (record.scored === record.conceded){
+      return 'd';
+    }
+
+    throw new Error('result record not set correctly');
   })
 ];
 
@@ -72,7 +89,7 @@ context('knex-csv-transformer', () => {
       it('creates the transformers', () => {
         const transformed = transformer.opts.transformers;
 
-        expect(transformed.length).to.equal(5);
+        expect(transformed.length).to.equal(8);
       });
 
       it('creates the transformed object', async () => {
@@ -91,6 +108,12 @@ context('knex-csv-transformer', () => {
         expect(team).to.equal(team);
 
         expect(record.location).to.equal('h');
+
+        expect(record.scored).to.equal(0);
+
+        expect(record.conceded).to.equal(1);
+
+        expect(record.result).to.equal('l');
       });
     });
   });

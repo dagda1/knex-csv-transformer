@@ -160,8 +160,7 @@ export class KnexCsvTransformer extends EventEmitter {
         return header === transformer.column;
       });
 
-      let value;
-      const csvValue = record[headerIndex];
+      let csvValue = record[headerIndex];
 
       if(transformer.options.lookUp) {
         const lookUp = transformer.options.lookUp;
@@ -173,7 +172,7 @@ export class KnexCsvTransformer extends EventEmitter {
         const result = await this.knex(lookUp.table).where(whereClause).select(lookUp.scalar);
 
         if(result.length) {
-          value = result[0][lookUp.scalar];
+          csvValue = result[0][lookUp.scalar];
         } else {
           if(lookUp.createIfNotExists && lookUp.createIfNotEqual(csvValue)) {
             const insert = {[lookUp.column]: csvValue};
@@ -182,14 +181,14 @@ export class KnexCsvTransformer extends EventEmitter {
               .insert(insert)
               .returning('id');
 
-            value = inserted[0];
+            csvValue = inserted[0];
           }
         }
-      } else {
-        value = transformer.formatter(csvValue, record);
       }
 
-      if(value && transformer.options.addIf(value)) {
+      const value = transformer.formatter(csvValue, record, obj);
+
+      if((value != undefined && value != null) && transformer.options.addIf(value)) {
         obj[transformer.field] = value;
       }
     }
