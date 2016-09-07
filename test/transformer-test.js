@@ -42,16 +42,16 @@ const transformers = [
     },
     addIf: (value) => value !== "Liverpool"
   }),
-  transfomerHeader('null', "location", function(value, data) {
-    return data[3] === "Liverpool" ? "h" : "a";
+  transfomerHeader('null', 'location', function(value, data) {
+    return data[3] === 'Liverpool' ? 'h' : 'a';
   }),
-  transfomerHeader('null', "scored", function(value, data) {
-    return data[3] === "Liverpool" ? data[5] : data[6];
+  transfomerHeader('null', 'scored', function(value, data) {
+    return data[3] === 'Liverpool' ? data[5] : data[6];
   }),
-  transfomerHeader('null', "conceded", function(value, data) {
-    return data[3] === "Liverpool" ? data[6] : data[5];
+  transfomerHeader('null', 'conceded', function(value, data) {
+    return data[3] === 'Liverpool' ? data[6] : data[5];
   }),
-  transfomerHeader('null', "result", function(value, data, record) {
+  transfomerHeader('null', 'result', function(value, data, record) {
     if(record.scored > record.conceded) {
       return 'w';
     } else if(record.scored < record.conceded) {
@@ -133,9 +133,9 @@ context('when importing with headers', () => {
   });
 
   describe('transformer', () => {
-    it('merge the headers', () => {
+    it('transforms the data and imports the csv file', () => {
 
-      const ignoreIf = (data) => data[3] !== "Liverpool" && data[4] !== "Liverpool";
+      const ignoreIf = (data) => data[3] !== 'Liverpool' && data[4] !== 'Liverpool';
       const opts = { table: 'results', file: __dirname + '/fixtures/test.csv', encoding: 'utf8', transformers, ignoreIf: ignoreIf };
 
       const f = seeder(opts)(knex, Promise);
