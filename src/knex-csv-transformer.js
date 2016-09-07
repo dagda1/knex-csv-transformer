@@ -10,7 +10,9 @@ export const transformer = {
     return (knex, Promise) => {
       return new Promise((resolve, reject) => {
         KnexCsvTransformer.fromKnexClient(knex)
-          .on('end', resolve)
+          .on('end', (results) => {
+            resolve(results);
+          })
           .on('error', reject)
           .generate(options);
       });
@@ -75,6 +77,7 @@ export class KnexCsvTransformer extends EventEmitter {
       table: null,
       encoding: 'utf8',
       recordsPerQuery: 100,
+      ignoreIf: () => false,
       parser: {
         delimiter: ',',
         quote: '"',
@@ -101,8 +104,7 @@ export class KnexCsvTransformer extends EventEmitter {
     this.csv.pipe( iconv.decodeStream(this.opts.encoding) ).pipe(this.parser);
   }
 
-  async onReadable() {
-    let obj = {};
+  onReadable() {
     let record = this.parser.read();
 
     if (record === null) {
@@ -112,7 +114,11 @@ export class KnexCsvTransformer extends EventEmitter {
     if (this.parser.count <= 1) {
       this.headers = record;
     } else {
-      this.records.push( await this.createObjectFrom(record) );
+      if(!this.opts.ignoreIf(record)) {
+        const newRecord = this.createObjectFrom(record);
+        console.log('we are here');
+        this.records.push( newRecord );
+      }
     }
 
     if (this.records.length < this.opts.recordsPerQuery) {
@@ -123,12 +129,16 @@ export class KnexCsvTransformer extends EventEmitter {
   }
 
   onEnd() {
-    if (this.records.length > 0) {
-      this.queue = this.queue.then( this.createBulkInsertQueue() );
-    }
-    this.queue.then(() => {
-      return this.emit('end', this.results);
-    }).catch(this.onFailed);
+    console.dir(this.records);
+    Promise.all(this.records).then(values => {
+      this.emit('end', values);
+    });
+    // if (this.records.length > 0) {
+    //   this.queue = this.queue.then( this.createBulkInsertQueue() );
+    // }
+    // this.queue.then(() => {
+    //   return this.emit('end', this.results);
+    // }).catch(this.onFailed);
   }
 
   createCleanUpQueue() {
@@ -150,54 +160,55 @@ export class KnexCsvTransformer extends EventEmitter {
     };
   }
 
-  async createObjectFrom(record) {
-    let obj = {};
+  createObjectFrom(record) {
+    const self = this;
+    return new Promise(async (resolve, reject) => {
+      let obj = {};
 
-    for(let i = 0, l = this.opts.transformers.length; i < l; i++) {
-      let transformer = this.opts.transformers[i];
+      for(let i = 0, l = self.opts.transformers.length; i < l; i++) {
+        let transformer = self.opts.transformers[i];
 
-      const headerIndex = findIndex(this.headers, (header) => {
-        return header === transformer.column;
-      });
+        const headerIndex = findIndex(self.headers, (header) => {
+          return header === transformer.column;
+        });
 
-      let csvValue = record[headerIndex];
+        let csvValue = record[headerIndex];
 
-      if(transformer.options.lookUp) {
-        const lookUp = transformer.options.lookUp;
+        if(transformer.options.lookUp) {
+          const lookUp = transformer.options.lookUp;
 
-        const whereClause = {};
+          const whereClause = {};
 
-        whereClause[lookUp.column] = csvValue;
+          whereClause[lookUp.column] = csvValue;
 
-        const result = await this.knex(lookUp.table).where(whereClause).select(lookUp.scalar);
+          console.log('before here');
+          const result = await self.knex(lookUp.table).where(whereClause).select(lookUp.scalar);
+          console.dir(result);
 
-        if(result.length) {
-          csvValue = result[0][lookUp.scalar];
-        } else {
-          if(lookUp.createIfNotExists && lookUp.createIfNotEqual(csvValue)) {
-            const insert = {[lookUp.column]: csvValue};
+          if(result.length) {
+            csvValue = result[0][lookUp.scalar];
+          } else {
+            if(lookUp.createIfNotExists && lookUp.createIfNotEqual(csvValue)) {
+              const insert = {[lookUp.column]: csvValue};
 
-            const inserted = await this.knex(lookUp.table)
-              .insert(insert)
-              .returning('id');
+              const inserted = await self.knex(lookUp.table)
+                      .insert(insert)
+                      .returning('id');
 
-            csvValue = inserted[0];
+              csvValue = inserted[0];
+            }
           }
+        }
+
+        const value = transformer.formatter(csvValue, record, obj);
+
+        if((value != undefined && value != null) && transformer.options.addIf(value)) {
+          obj[transformer.field] = value;
         }
       }
 
-      const value = transformer.formatter(csvValue, record, obj);
-
-      if((value != undefined && value != null) && transformer.options.addIf(value)) {
-        obj[transformer.field] = value;
-      }
-    }
-
-    return Promise.resolve(obj);
-  }
-
-  async executeQuery() {
-    return await this.knex('managers').select('name');
+      return resolve(obj);
+    });
   }
 
   onSucceeded(res) {
