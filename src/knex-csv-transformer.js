@@ -5,20 +5,20 @@ import parse from 'csv-parse';
 import iconv from 'iconv-lite';
 import { Promise } from 'bluebird';
 
-export const transformer = {
+export const seeder = {
   seed(options) {
     return (knex, Promise) => {
       return new Promise((resolve, reject) => {
         KnexCsvTransformer.fromKnexClient(knex)
-          .on('end', (results) => {
-            resolve(results);
-          })
+          .on('end', resolve)
           .on('error', reject)
           .generate(options);
       });
     };
   }
 };
+
+export default seeder.seed;
 
 const identity = (x) => x;
 
@@ -46,20 +46,17 @@ export function transfomerHeader(column, field, formatter, options) {
   };
 }
 
-export default transformer.seed;
+class KnexCsvTransformer extends EventEmitter {
 
-export class KnexCsvTransformer extends EventEmitter {
   constructor(knex) {
     super();
     this.opts = {};
     this.knex = knex;
     this.headers = [];
-    this.transformers = [];
     this.records = [];
     this.parser = null;
     this.queue = null;
     this.results = [];
-    this.transformers = [];
     this.onReadable = this.onReadable.bind(this);
     this.onEnd = this.onEnd.bind(this);
     this.onSucceeded = this.onSucceeded.bind(this);
@@ -77,7 +74,6 @@ export class KnexCsvTransformer extends EventEmitter {
       table: null,
       encoding: 'utf8',
       recordsPerQuery: 100,
-      ignoreIf: () => false,
       parser: {
         delimiter: ',',
         quote: '"',
@@ -105,6 +101,7 @@ export class KnexCsvTransformer extends EventEmitter {
   }
 
   onReadable() {
+    let obj = {};
     let record = this.parser.read();
 
     if (record === null) {
@@ -113,11 +110,9 @@ export class KnexCsvTransformer extends EventEmitter {
 
     if (this.parser.count <= 1) {
       this.headers = record;
-    } else {
-      if(!this.opts.ignoreIf(record)) {
-        const newRecord = this.createObjectFrom(record);
-        this.records.push( newRecord );
-      }
+    } else if(!this.opts.ignoreIf(record)){
+      const newRecord = this.createObjectFrom(record);
+      this.records.push( newRecord );
     }
 
     if (this.records.length < this.opts.recordsPerQuery) {
@@ -128,16 +123,12 @@ export class KnexCsvTransformer extends EventEmitter {
   }
 
   onEnd() {
-    console.log(`in end with ${this.records.length} records`);
-    Promise.all(this.records).then(values => {
-      this.emit('end', values);
-    });
-    // if (this.records.length > 0) {
-    //   this.queue = this.queue.then( this.createBulkInsertQueue() );
-    // }
-    // this.queue.then(() => {
-    //   return this.emit('end', this.results);
-    // }).catch(this.onFailed);
+    if (this.records.length > 0) {
+      this.queue = this.queue.then( this.createBulkInsertQueue() );
+    }
+    this.queue.then(() => {
+      return this.emit('end', this.results);
+    }).catch(this.onFailed);
   }
 
   createCleanUpQueue() {
@@ -149,13 +140,21 @@ export class KnexCsvTransformer extends EventEmitter {
   }
 
   createBulkInsertQueue() {
-    const records = this.records.splice(0, this.opts.recordsPerQuery);
+    //const records = this.records.splice(0, this.opts.recordsPerQuery);
 
     return () => {
-      return this.knex(this.opts.table)
-        .insert(records)
-        .then(this.onSucceeded)
-        .catch(this.onFailed);
+      return new Promise((resolver, rejecter) => {
+        Promise.all(this.records).then((res) => {
+          console.log('here');
+          console.dir(res);
+        }).catch((err) => {
+          console.dir(err);
+        });
+      });
+      // return this.knex(this.opts.table)
+      //   .insert(this.records)
+      //   .then(this.onSucceeded)
+      //   .catch(this.onFailed);
     };
   }
 
@@ -165,7 +164,7 @@ export class KnexCsvTransformer extends EventEmitter {
 
     return new Promise((resolve, reject) => {
       const getValue = (transformer, csvValue, obj) => {
-        const value = transformer.formatter(csvValue, record);
+        const value = transformer.formatter(csvValue, record, obj);
 
         if((value != undefined && value != null) && transformer.options.addIf(value)) {
           return value;
@@ -181,46 +180,63 @@ export class KnexCsvTransformer extends EventEmitter {
 
         let csvValue = record[headerIndex];
 
-        // if(transformer.options.lookUp) {
-        //   const lookUp = transformer.options.lookUp;
+        if(transformer.options.lookUp) {
+          promises.push(new Promise((resolve, reject) => {
+            const lookUp = transformer.options.lookUp;
 
-        //   const whereClause = {};
+            const whereClause = {};
 
-        //   whereClause[lookUp.column] = csvValue;
+            whereClause[lookUp.column] = csvValue;
 
-        //   const result = await self.knex(lookUp.table).where(whereClause).select(lookUp.scalar);
+            self.knex(lookUp.table).where(whereClause).select(lookUp.scalar).then((result) => {
+              if(result.length) {
+                return resolve({
+                  transformer,
+                  value: result[0][lookUp.scalar],
+                  headerIndex,
+                  record
+                });
+              }else {
+                if(lookUp.createIfNotExists && lookUp.createIfNotEqual(csvValue)) {
+                  const insert = {[lookUp.column]: csvValue};
 
-        //   if(result.length) {
-        //     csvValue = result[0][lookUp.scalar];
-        //   } else {
-        //     if(lookUp.createIfNotExists && lookUp.createIfNotEqual(csvValue)) {
-        //       const insert = {[lookUp.column]: csvValue};
-
-        //       const inserted = await self.knex(lookUp.table)
-        //               .insert(insert)
-        //               .returning('id');
-
-        //       csvValue = inserted[0];
-        //     }
-        //   }
-        // }
-
-        promises.push(Promise.resolve({
-          transformer,
-          csvValue,
-          headerIndex,
-          record
-        }));
-
-        //setValue(transformer, csvValue);
-
+                  self.knex(lookUp.table)
+                    .insert(insert)
+                    .returning('id')
+                    .then((inserted) => {
+                      return resolve({
+                        transformer,
+                        value: inserted[0],
+                        headerIndex,
+                        record
+                      });
+                    });
+                } else {
+                  resolve({
+                    transformer,
+                    value: undefined,
+                    headerIndex,
+                    record
+                  });
+                }
+              }
+            });
+          }));
+        } else {
+          promises.push(Promise.resolve({
+            transformer,
+            value: csvValue,
+            headerIndex,
+            record
+          }));
+        }
       }
 
       return Promise.all(promises).then((result) => {
         const obj = result.reduce((prev, curr, index, arr) => {
-          const value = getValue(curr.transformer, curr.csvValue);
+          const value = getValue(curr.transformer, curr.value, prev);
 
-          if(!value) {
+          if(value === undefined && value === null) {
             return prev;
           }
 
@@ -232,6 +248,9 @@ export class KnexCsvTransformer extends EventEmitter {
         console.dir(obj);
 
         resolve(obj);
+      }).catch((err) => {
+        console.log('in Promise.all error');
+        console.dir(err);
       });
     });
   }
