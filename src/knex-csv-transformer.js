@@ -116,7 +116,6 @@ export class KnexCsvTransformer extends EventEmitter {
     } else {
       if(!this.opts.ignoreIf(record)) {
         const newRecord = this.createObjectFrom(record);
-        console.log('we are here');
         this.records.push( newRecord );
       }
     }
@@ -129,7 +128,7 @@ export class KnexCsvTransformer extends EventEmitter {
   }
 
   onEnd() {
-    console.dir(this.records);
+    console.log(`in end with ${this.records.length} records`);
     Promise.all(this.records).then(values => {
       this.emit('end', values);
     });
@@ -162,8 +161,16 @@ export class KnexCsvTransformer extends EventEmitter {
 
   createObjectFrom(record) {
     const self = this;
-    return new Promise(async (resolve, reject) => {
-      let obj = {};
+    const promises = [];
+
+    return new Promise((resolve, reject) => {
+      const getValue = (transformer, csvValue, obj) => {
+        const value = transformer.formatter(csvValue, record);
+
+        if((value != undefined && value != null) && transformer.options.addIf(value)) {
+          return value;
+        }
+      };
 
       for(let i = 0, l = self.opts.transformers.length; i < l; i++) {
         let transformer = self.opts.transformers[i];
@@ -174,40 +181,58 @@ export class KnexCsvTransformer extends EventEmitter {
 
         let csvValue = record[headerIndex];
 
-        if(transformer.options.lookUp) {
-          const lookUp = transformer.options.lookUp;
+        // if(transformer.options.lookUp) {
+        //   const lookUp = transformer.options.lookUp;
 
-          const whereClause = {};
+        //   const whereClause = {};
 
-          whereClause[lookUp.column] = csvValue;
+        //   whereClause[lookUp.column] = csvValue;
 
-          console.log('before here');
-          const result = await self.knex(lookUp.table).where(whereClause).select(lookUp.scalar);
-          console.dir(result);
+        //   const result = await self.knex(lookUp.table).where(whereClause).select(lookUp.scalar);
 
-          if(result.length) {
-            csvValue = result[0][lookUp.scalar];
-          } else {
-            if(lookUp.createIfNotExists && lookUp.createIfNotEqual(csvValue)) {
-              const insert = {[lookUp.column]: csvValue};
+        //   if(result.length) {
+        //     csvValue = result[0][lookUp.scalar];
+        //   } else {
+        //     if(lookUp.createIfNotExists && lookUp.createIfNotEqual(csvValue)) {
+        //       const insert = {[lookUp.column]: csvValue};
 
-              const inserted = await self.knex(lookUp.table)
-                      .insert(insert)
-                      .returning('id');
+        //       const inserted = await self.knex(lookUp.table)
+        //               .insert(insert)
+        //               .returning('id');
 
-              csvValue = inserted[0];
-            }
-          }
-        }
+        //       csvValue = inserted[0];
+        //     }
+        //   }
+        // }
 
-        const value = transformer.formatter(csvValue, record, obj);
+        promises.push(Promise.resolve({
+          transformer,
+          csvValue,
+          headerIndex,
+          record
+        }));
 
-        if((value != undefined && value != null) && transformer.options.addIf(value)) {
-          obj[transformer.field] = value;
-        }
+        //setValue(transformer, csvValue);
+
       }
 
-      return resolve(obj);
+      return Promise.all(promises).then((result) => {
+        const obj = result.reduce((prev, curr, index, arr) => {
+          const value = getValue(curr.transformer, curr.csvValue);
+
+          if(!value) {
+            return prev;
+          }
+
+          prev[curr.transformer.field] = value;
+
+          return prev;
+        }, {});
+
+        console.dir(obj);
+
+        resolve(obj);
+      });
     });
   }
 
