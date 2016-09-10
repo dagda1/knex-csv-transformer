@@ -46,8 +46,6 @@ export function transfomerHeader(column, field, formatter, options) {
   };
 }
 
-export default transformer.seed;
-
 export class KnexCsvTransformer extends EventEmitter {
   constructor(knex) {
     super();
@@ -58,7 +56,7 @@ export class KnexCsvTransformer extends EventEmitter {
     this.records = [];
     this.parser = null;
     this.queue = null;
-    this.results = [];
+    this.promises = [];
     this.transformers = [];
     this.onReadable = this.onReadable.bind(this);
     this.onEnd = this.onEnd.bind(this);
@@ -115,46 +113,36 @@ export class KnexCsvTransformer extends EventEmitter {
       this.headers = record;
     } else {
       if(!this.opts.ignoreIf(record)) {
-        const newRecord = this.createObjectFrom(record);
-        console.log('we are here');
-        this.records.push( newRecord );
+        const promise = this.createObjectFrom(record);
+        this.promises.push( promise );
       }
     }
-
-    if (this.records.length < this.opts.recordsPerQuery) {
-      return;
-    }
-
-    this.queue = this.queue.then( this.createBulkInsertQueue() );
   }
 
   onEnd() {
-    console.dir(this.records);
-    Promise.all(this.records).then(values => {
-      this.emit('end', values);
+    Promise.all(this.promises).then(values => {
+      if (values.length > 0) {
+        this.queue = this.queue.then( this.createBulkInsertQueue(values) );
+      }
+      this.queue.then(() => {
+        return this.emit('end', this.results);
+      }).catch(this.onFailed);
     });
-    // if (this.records.length > 0) {
-    //   this.queue = this.queue.then( this.createBulkInsertQueue() );
-    // }
-    // this.queue.then(() => {
-    //   return this.emit('end', this.results);
-    // }).catch(this.onFailed);
   }
 
   createCleanUpQueue() {
     return () => {
-      return this.knex(this.opts.table).del()
-        .then(this.onSucceeded)
-        .catch(this.onFailed);
+      return Promise.resolve(true);
+      // return this.knex(this.opts.table).del()
+      //   .then(this.onSucceeded)
+      //   .catch(this.onFailed);
     };
   }
 
-  createBulkInsertQueue() {
-    const records = this.records.splice(0, this.opts.recordsPerQuery);
-
+  createBulkInsertQueue(values) {
     return () => {
       return this.knex(this.opts.table)
-        .insert(records)
+        .insert(values)
         .then(this.onSucceeded)
         .catch(this.onFailed);
     };
@@ -162,6 +150,7 @@ export class KnexCsvTransformer extends EventEmitter {
 
   createObjectFrom(record) {
     const self = this;
+
     return new Promise(async (resolve, reject) => {
       let obj = {};
 
@@ -181,9 +170,7 @@ export class KnexCsvTransformer extends EventEmitter {
 
           whereClause[lookUp.column] = csvValue;
 
-          console.log('before here');
           const result = await self.knex(lookUp.table).where(whereClause).select(lookUp.scalar);
-          console.dir(result);
 
           if(result.length) {
             csvValue = result[0][lookUp.scalar];
@@ -212,7 +199,7 @@ export class KnexCsvTransformer extends EventEmitter {
   }
 
   onSucceeded(res) {
-    this.results.push(res);
+    this.promises.push(res);
   }
 
   onFailed(err) {
